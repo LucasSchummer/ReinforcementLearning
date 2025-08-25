@@ -8,7 +8,7 @@ BALL_COLOR = (236, 236, 236)
 PLAYER_COLOR = (92, 186, 92)
 ADVERSARY_COLOR = (213, 130, 74)
 
-def get_state(new_frame, old_ball_position):
+def get_state(new_frame, old_ball_position, old_player_position=-1):
 
     def find_ball(frame, color):
         
@@ -33,6 +33,13 @@ def get_state(new_frame, old_ball_position):
             return 0, 0
 
     _, player_coord = find_paddle(new_frame, PLAYER_COLOR) # Player is always visible
+
+    # Compute the player speed if the old position is available
+    if old_player_position != -1:
+        player_speed = player_coord - old_player_position
+    else:
+        player_speed = 0
+
     visible_ball, ball_coord = find_ball(new_frame, BALL_COLOR) # Try to find the ball on the current frame
     visible_adv, adv_coord = find_paddle(new_frame, ADVERSARY_COLOR) # Try to find the ball on the current frame
 
@@ -48,9 +55,9 @@ def get_state(new_frame, old_ball_position):
 
 
     ball_position = (visible_ball, ball_coord)
-    state = np.concatenate([[visible_ball, known_ball_speed, visible_adv], ball_coord, ball_speed, [adv_coord, player_coord]])
+    state = np.concatenate([[visible_ball, known_ball_speed, visible_adv], ball_coord, ball_speed, [adv_coord, player_coord, player_speed]])
 
-    return ball_position, state
+    return ball_position, player_coord, state
 
 
 def generate_evaluation_states(env, device, n_states):
@@ -65,7 +72,7 @@ def generate_evaluation_states(env, device, n_states):
         _ = env.step(0)
 
         frame, reward, terminated, truncated, info = env.step(0)
-        ball_position, state = get_state(frame, (0, np.array([0, 0])))
+        ball_position, player_position, state = get_state(frame, (0, np.array([0, 0])))
         state = torch.tensor(state).float().to(device)
 
         waiting_frames = np.random.randint(0, 200)
@@ -74,7 +81,7 @@ def generate_evaluation_states(env, device, n_states):
 
             # Perform given number of random actions
             frame, reward, terminated, truncated, info = env.step(env.action_space.sample())
-            ball_position, state = get_state(frame, ball_position)
+            ball_position, player_position, state = get_state(frame, ball_position, player_position)
             state = torch.tensor(state).float().to(device)
 
             if terminated or truncated:
@@ -97,7 +104,7 @@ def generate_video(env, Q, device, action_map, epsilon, n_episodes, filename):
         _ = env.step(0)
 
         frame, reward, terminated, truncated, info = env.step(0)
-        ball_position, state = get_state(frame, (0, np.array([0, 0])))
+        ball_position, player_position, state = get_state(frame, (0, np.array([0, 0])))
         state = torch.tensor(state).float().to(device)
 
         done = False
@@ -112,7 +119,7 @@ def generate_video(env, Q, device, action_map, epsilon, n_episodes, filename):
             frame, reward, terminated, truncated, info = env.step(action_map[action])
             frames.append(cv.resize(frame, (160, 224)))
 
-            ball_position, next_state = get_state(frame, ball_position)
+            ball_position, player_position, state = get_state(frame, ball_position, player_position)
             next_state = torch.tensor(next_state).float().to(device)
 
             done = terminated or truncated

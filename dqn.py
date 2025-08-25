@@ -4,6 +4,7 @@ import torch.nn as nn
 import torch.nn.functional as F
 from collections import deque
 import numpy as np
+from utils import *
 
 class QNetwork(nn.Module):
       def __init__(self, input_dim, hidden_dim = 256, output_dim = 3):
@@ -109,3 +110,40 @@ def load_checkpoint(q_net, optimizer, replay_buffer, filename="checkpoint.pth", 
 def get_avg_Qvalues(Q, states):
 
     return np.mean([torch.mean(Q(state)).item() for state in states])
+
+
+def evaluate_average_return(Q, env, device, n_episodes, action_map):
+
+    returns = []
+    victories = 0
+    for episode in range(n_episodes):
+
+        total_reward = 0
+
+        # Skip first frame (different color)
+        frame, _ = env.reset()
+        _ = env.step(0)
+
+        frame, reward, terminated, truncated, info = env.step(0)
+        ball_position, player_position, state = get_state(frame, (0, np.array([0, 0])))
+        state = torch.tensor(state).float().to(device)
+
+        done = False
+        while not done:
+
+            # greedy action selection
+            action = torch.argmax(Q(state)).item()
+
+            frame, reward, terminated, truncated, info = env.step(action_map[action])
+
+            ball_position, player_position, state = get_state(frame, ball_position, player_position)
+            state = torch.tensor(state).float().to(device)
+
+            total_reward += reward
+
+            done = terminated or truncated
+
+        returns.append(total_reward)
+        if reward == 1 : victories += 1
+
+    return np.mean(returns), victories / n_episodes
