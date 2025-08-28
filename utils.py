@@ -120,11 +120,8 @@ def generate_video(env, Q, device, action_map, epsilon, n_episodes, filename):
             frames.append(cv.resize(frame, (160, 224)))
 
             ball_position, player_position, state = get_state(frame, ball_position, player_position)
-            next_state = torch.tensor(next_state).float().to(device)
+            state = torch.tensor(state).float().to(device)
 
             done = terminated or truncated
-
-            state = next_state
-
     
     imageio.mimsave(filename, frames, fps=30)
