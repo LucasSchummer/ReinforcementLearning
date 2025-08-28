@@ -28,8 +28,7 @@ This project was originally inspired by the following paper :
 ---
 ### 🎮 Demo
 
-[![Watch the demo](https://img.youtube.com/vi/KTPIYCiJMKY/hqdefault.jpg)](https://www.youtube.com/watch?v=KTPIYCiJMKY)
-
+![Demo](images/dqn_2000_ep.gif)
 
 ---
 
