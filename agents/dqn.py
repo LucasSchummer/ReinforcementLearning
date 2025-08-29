@@ -1,10 +1,13 @@
 import random
+import imageio
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
 from collections import deque
 import numpy as np
-from utils import *
+from pong_utils import *
+
+
 
 class QNetwork(nn.Module):
       def __init__(self, input_dim, hidden_dim = 256, output_dim = 3):
@@ -18,6 +21,7 @@ class QNetwork(nn.Module):
             states  = F.relu(self.fcQ1(states))
             actions = self.fcQ2(states)
             return actions
+
 
 class ReplayBuffer():
       def __init__(self):
@@ -43,6 +47,7 @@ class ReplayBuffer():
 
       def size(self):
             return len(self.buffer)
+
 
 def Update_Q(buffer, Q, Q_target, Q_optimizer, batch_size, gamma):
       states, actions, rewards, next_states, terminateds, truncateds = buffer.sample(batch_size)
@@ -75,6 +80,7 @@ def Update_Q(buffer, Q, Q_target, Q_optimizer, batch_size, gamma):
 
       return loss.item()
 
+
 def save_checkpoint(q_net, optimizer, replay_buffer, returns, avg_Qvalues, td_losses, episode, epsilon, filename="checkpoint.pth"):
     checkpoint = {
         "q_network": q_net.state_dict(),
@@ -88,6 +94,7 @@ def save_checkpoint(q_net, optimizer, replay_buffer, returns, avg_Qvalues, td_lo
     }
     torch.save(checkpoint, filename)
     # print(f"Checkpoint saved to {filename}")
+
 
 def load_checkpoint(q_net, optimizer, replay_buffer, filename="checkpoint.pth", device="cpu"):
     checkpoint = torch.load(filename, map_location=device, weights_only=False)
@@ -107,43 +114,53 @@ def load_checkpoint(q_net, optimizer, replay_buffer, filename="checkpoint.pth", 
     # print(f"Checkpoint loaded from {filename}, resuming at episode {episode}")
     return returns, avg_Qvalues, td_losses, episode, epsilon
 
-def get_avg_Qvalues(Q, states):
-
-    return np.mean([torch.mean(Q(state)).item() for state in states])
 
 
-def evaluate_average_return(Q, env, device, n_episodes, action_map):
+# # --- Pygame init ---
+# pygame.init()
+# screen = pygame.display.set_mode((400, 300))
+# pygame.display.set_caption("Play Pong with Keyboard")
+# clock = pygame.time.Clock()
 
-    returns = []
-    victories = 0
-    for episode in range(n_episodes):
+# # --- Gym init ---
+# env = gym.make("ALE/Pong-v5", render_mode="human")
+# obs, info = env.reset()
 
-        total_reward = 0
+# # Mapping: keys -> actions
+# # 0: NOOP, 1: FIRE, 2: RIGHT, 3: LEFT, 4: RIGHTFIRE, 5: LEFTFIRE
+# key_action_map = {
+#     pygame.K_UP: 2,     # Move up (RIGHT in Pong's terms)
+#     pygame.K_DOWN: 3,   # Move down (LEFT in Pong's terms)
+#     pygame.K_SPACE: 1,  # Fire (start the game)
+# }
 
-        # Skip first frame (different color)
-        frame, _ = env.reset()
-        _ = env.step(0)
+# done = False
+# while True:
+#     action = 0  # Default NOOP
 
-        frame, reward, terminated, truncated, info = env.step(0)
-        ball_position, player_position, state = get_state(frame, (0, np.array([0, 0])))
-        state = torch.tensor(state).float().to(device)
+#     # --- Handle events ---
+#     for event in pygame.event.get():
+#         if event.type == pygame.QUIT:
+#             env.close()
+#             pygame.quit()
+#             raise SystemExit
+        
+#         if event.type == pygame.KEYDOWN and event.key == pygame.K_ESCAPE:
+#             env.close()
+#             pygame.quit()
+#             raise SystemExit
 
-        done = False
-        while not done:
+#     # Get pressed keys
+#     keys = pygame.key.get_pressed()
+#     for key, mapped_action in key_action_map.items():
+#         if keys[key]:
+#             action = mapped_action
 
-            # greedy action selection
-            action = torch.argmax(Q(state)).item()
+#     # Step the environment
+#     obs, reward, terminated, truncated, info = env.step(action)
+#     done = terminated or truncated
 
-            frame, reward, terminated, truncated, info = env.step(action_map[action])
+#     if done:
+#         obs, info = env.reset()
 
-            ball_position, player_position, state = get_state(frame, ball_position, player_position)
-            state = torch.tensor(state).float().to(device)
-
-            total_reward += reward
-
-            done = terminated or truncated
-
-        returns.append(total_reward)
-        if reward == 1 : victories += 1
-
-    return np.mean(returns), victories / n_episodes
+#     clock.tick(60)  # Limit loop to 60 FPS
