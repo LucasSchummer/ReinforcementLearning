@@ -45,7 +45,8 @@ This project was originally inspired by the following paper :
 
 ### 📊 Results
 
-**1. Training reward**
+**1. Training reward**  
+
 ![Training Reward](images/dqn_av_return.png)
 
 This plot shows the evolution of the average reward per episode during training.  
@@ -57,7 +58,8 @@ However, this doesn't mean that the agent stopped learning during the second hal
 - The timestep limit set to 10000 per episode, leading to truncated episodes and consequently truncated return
 
 
-**2. Average Estimated Q_values**
+**2. Average Estimated Q_values**  
+
 ![Training Reward](images/dqn_av_q_value.png)
 
 This plot shows the evolution of the average estimates Q_values $\hat{Q}(s,a)$ on a given set of states during training. ($y = \frac{1}{N_{states}} \sum_{s \in S} {\frac{1}{n_a}} \sum_{a \in A}{\hat{Q}(s,a)}$)
