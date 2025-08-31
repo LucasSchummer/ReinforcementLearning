@@ -5,8 +5,7 @@ import torch.nn as nn
 import torch.nn.functional as F
 from collections import deque
 import numpy as np
-from pong_utils import *
-
+from envs.pong_utils import *
 
 
 class QNetwork(nn.Module):
@@ -113,54 +112,3 @@ def load_checkpoint(q_net, optimizer, replay_buffer, filename="checkpoint.pth", 
 
     # print(f"Checkpoint loaded from {filename}, resuming at episode {episode}")
     return returns, avg_Qvalues, td_losses, episode, epsilon
-
-
-
-# # --- Pygame init ---
-# pygame.init()
-# screen = pygame.display.set_mode((400, 300))
-# pygame.display.set_caption("Play Pong with Keyboard")
-# clock = pygame.time.Clock()
-
-# # --- Gym init ---
-# env = gym.make("ALE/Pong-v5", render_mode="human")
-# obs, info = env.reset()
-
-# # Mapping: keys -> actions
-# # 0: NOOP, 1: FIRE, 2: RIGHT, 3: LEFT, 4: RIGHTFIRE, 5: LEFTFIRE
-# key_action_map = {
-#     pygame.K_UP: 2,     # Move up (RIGHT in Pong's terms)
-#     pygame.K_DOWN: 3,   # Move down (LEFT in Pong's terms)
-#     pygame.K_SPACE: 1,  # Fire (start the game)
-# }
-
-# done = False
-# while True:
-#     action = 0  # Default NOOP
-
-#     # --- Handle events ---
-#     for event in pygame.event.get():
-#         if event.type == pygame.QUIT:
-#             env.close()
-#             pygame.quit()
-#             raise SystemExit
-        
-#         if event.type == pygame.KEYDOWN and event.key == pygame.K_ESCAPE:
-#             env.close()
-#             pygame.quit()
-#             raise SystemExit
-
-#     # Get pressed keys
-#     keys = pygame.key.get_pressed()
-#     for key, mapped_action in key_action_map.items():
-#         if keys[key]:
-#             action = mapped_action
-
-#     # Step the environment
-#     obs, reward, terminated, truncated, info = env.step(action)
-#     done = terminated or truncated
-
-#     if done:
-#         obs, info = env.reset()
-
-#     clock.tick(60)  # Limit loop to 60 FPS
