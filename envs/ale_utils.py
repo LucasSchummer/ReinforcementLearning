@@ -6,6 +6,7 @@ import torch
 import pygame
 import os
 import glob
+import imageio
 from collections import deque
 
 
@@ -66,6 +67,40 @@ def load_checkpoint(model, optimizer, filename="checkpoint.pth", device="cpu"):
 
     # print(f"Checkpoint loaded from {filename}, resuming at episode {episode}")
     return returns, avg_values, episode
+
+
+def generate_video(env, model, frame_stack, n_episodes, filename):
+
+    frames = []
+    
+    for episode in range(n_episodes):
+
+        last_frames = deque(maxlen=frame_stack)
+
+        frame, _ = env.reset()
+        phi_frame = preprocess_frame(frame)
+
+        # Initially, fill the last_frames buffer with the first frame
+        for _ in range(frame_stack):
+            last_frames.append(phi_frame)
+
+        state = get_state(last_frames)
+
+        done = False
+        while not done:
+
+            actor_logits, value = model(state)
+            m = torch.distributions.Categorical(logits=actor_logits)
+            action = m.sample()
+
+            frame, reward, done, truncated, info = env.step(action.item())
+            frames.append(cv.resize(frame, (160, 224)))
+            phi_frame = preprocess_frame(frame)
+
+            last_frames.append(phi_frame) # Automatically removes the oldest frame
+
+    
+    imageio.mimsave(filename, frames, fps=30)
 
 
 def play_manual_breakout(save_probability=.1):
