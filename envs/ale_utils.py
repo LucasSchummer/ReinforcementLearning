@@ -103,6 +103,31 @@ def generate_video(env, model, frame_stack, n_episodes, filename):
     imageio.mimsave(filename, frames, fps=30)
 
 
+def save_plots(returns, avg_values, episode, path):
+
+    for file in glob.glob(f"{path}/*.png"): os.remove(file)
+    
+    fig1, ax1 = plt.subplots()
+    avg_returns = [np.mean(returns[i-100:i]) for i in range(100, len(returns))]
+    ax1.plot(range(100, len(returns)), avg_returns)
+    ax1.set_title("Average return per episode (100 last episodes)")
+    ax1.set_xlabel("Episodes")
+    ax1.set_ylabel("Average Return")
+
+    
+    fig2, ax2 = plt.subplots()
+    moving_avg_values = [np.mean(avg_values[i-100:i]) for i in range(100, len(avg_values))]
+    ax2.plot(range(100, len(avg_values)), moving_avg_values)
+    ax2.set_title("Average value (moving average on last 100 episodes)")
+    ax2.set_xlabel("Episodes")
+    ax2.set_ylabel("Average value")
+
+    fig1.savefig(f"{path}/return_{episode}.png")
+    fig2.savefig(f"{path}/value_{episode}.png")
+    plt.close(fig1)
+    plt.close(fig2)
+
+
 def play_manual_breakout(save_probability=.1):
     """
     Play Breakout manually using keyboard (hold LEFT/RIGHT to keep moving).
