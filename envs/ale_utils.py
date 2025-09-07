@@ -69,38 +69,66 @@ def load_checkpoint(model, optimizer, filename="checkpoint.pth", device="cpu"):
     return returns, avg_values, episode
 
 
-def generate_video(env, model, frame_stack, n_episodes, filename):
+def generate_video(env, model, frame_stack, n_episodes, max_timesteps, filename, greedy=True):
 
+    model.eval()
     frames = []
     
-    for episode in range(n_episodes):
+    with torch.no_grad():
+        for episode in range(n_episodes):
 
-        last_frames = deque(maxlen=frame_stack)
+            last_frames = deque(maxlen=frame_stack)
 
-        frame, _ = env.reset()
-        phi_frame = preprocess_frame(frame)
+            frame, info = env.reset()
+            current_lives = info['lives']
+            phi_frame = preprocess_frame(frame)
+            frames.append(cv.resize(frame, (160, 224)))
 
-        # Initially, fill the last_frames buffer with the first frame
-        for _ in range(frame_stack):
-            last_frames.append(phi_frame)
+            for _ in range(frame_stack):
+                last_frames.append(phi_frame)
 
-        state = get_state(last_frames)
-
-        done = False
-        while not done:
-
-            actor_logits, value = model(state)
-            m = torch.distributions.Categorical(logits=actor_logits)
-            action = m.sample()
-
-            frame, reward, done, truncated, info = env.step(action.item())
+            # Play FIRE on the first frame to start the game
+            frame, reward, done, truncated, info = env.step(1)
             frames.append(cv.resize(frame, (160, 224)))
             phi_frame = preprocess_frame(frame)
+            last_frames.append(phi_frame)
 
-            last_frames.append(phi_frame) # Automatically removes the oldest frame
+            state = get_state(last_frames)
+
+            done = False
+            doFire = False
+            i = 0
+            while not done:
+
+                actor_logits, value = model(state)
+                i += 1
+                if greedy:
+                    action = actor_logits.argmax(dim=-1).item()
+                else:
+                    m = torch.distributions.Categorical(logits=actor_logits)
+                    action = m.sample().item()
+
+                if doFire:
+                    action = 1
+                    doFire = False
+
+                frame, reward, done, truncated, info = env.step(action)
+                if info['lives'] < current_lives: # If just lost a life, play fire on next frame to launch the game back
+                    current_lives = info['lives']
+                    doFire = True
+
+                frames.append(cv.resize(frame, (160, 224)))
+                phi_frame = preprocess_frame(frame)
+                last_frames.append(phi_frame) # Automatically removes the oldest frame
+                state = get_state(last_frames)
+
+                if i > max_timesteps:
+                    break
 
     
     imageio.mimsave(filename, frames, fps=30)
+
+    model.train()
 
 
 def save_plots(returns, avg_values, episode, path):
