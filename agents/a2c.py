@@ -31,20 +31,22 @@ class A2C(nn.Module):
             return actor_logits, value
       
 
-def update_network(model, optimizer, logits, log_probs, values, rewards, next_values, dones, gamma, c_actor, c_critic, c_entropy, max_grad_norm):
+def update_network(model, optimizer, device, logits, log_probs, values, rewards, next_values, dones, gamma, c_actor, c_critic, c_entropy, max_grad_norm):
 
-    rewards = torch.tensor(rewards, dtype=torch.float32)
-    dones = torch.tensor(dones, dtype=torch.float32)
+    rewards = torch.tensor(rewards, dtype=torch.float32, device=device)
+    dones = torch.tensor(dones, dtype=torch.float32, device=device)
+    values = torch.stack(values).to(device)
+    next_values = torch.stack(next_values).to(device)
+    log_probs = torch.stack(log_probs).to(device)
+    logits_tensor = torch.stack(logits).to(device)
 
-    target = rewards + (1 - dones) * gamma * torch.stack(next_values)
-    advantages = target - torch.stack(values)
+    target = rewards + (1 - dones) * gamma * next_values
+    advantages = target - values
  
-    logits_tensor = torch.stack(logits) 
-    entropies = [torch.distributions.Categorical(logits=l).entropy() for l in logits_tensor]
-    entropy = torch.stack(entropies).mean()
+    entropy = torch.distributions.Categorical(logits=logits_tensor).entropy().mean()
 
     critic_loss = 0.5 * advantages.pow(2).mean()
-    actor_loss = - (torch.stack(log_probs) * advantages.detach()).mean() # No grad through advantage
+    actor_loss = - (log_probs * advantages.detach()).mean() # No grad through advantage
 
     loss = c_critic * critic_loss + c_actor * actor_loss - c_entropy * entropy
 

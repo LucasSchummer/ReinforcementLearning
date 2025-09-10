@@ -1,6 +1,6 @@
 # Reinforcement Learning on simulated environments
 
-This project aims to implement and compare various **Reinforcement Learning (RL)** algorithms to solve different simulated Gymnasium environments.  
+This project aims to implement and compare various **Reinforcement Learning (RL)** algorithms to solve different simulated environments (Arcade Learning Environments / Pybullet) using the Gymnasium API.  
 
 The implementations are based on the theoretical foundations presented in the book:
 
@@ -16,7 +16,7 @@ The implementations are based on the theoretical foundations presented in the bo
 </summary>
 
 <br>
-This project implements a Deep Q-Learning (DQN) agent to play Atari Pong using the OpenAI Gym environment (`ALE/Pong-v5`).  
+This project implements a Deep Q-Learning (DQN) agent to play Atari Pong using Arcade Learning Environments (`ALE/Pong-v5`).  
 
 The agent is trained with handcrafted features extracted from frames (ball position and velocity, paddles  positions, player velocity).  
 Given the simplicity of the game, this approach is indeed very convenient as it allows the agent to access all relevant information from the raw frames while working with a much smaller and more manageable state space.
@@ -83,7 +83,7 @@ After initially overestimating the state-action values, the average estimation r
 </summary>
 <br>
 
-This project implements an Advantage Actor-Critic (A2C) agent to play **Atari Breakout** using the OpenAI Gym environment (`ALE/Breakout-v5`).  
+This project implements an Advantage Actor-Critic (A2C) agent to play **Atari Breakout** using Arcade Learning Environments (`ALE/Breakout-v5`).  
 
 The agent is trained using only the frames from the game, which are preprocessed according to the methodology presented in the following paper :
 
@@ -92,9 +92,6 @@ The agent is trained using only the frames from the game, which are preprocessed
 > [https://doi.org/10.1038/nature14236](https://doi.org/10.1038/nature14236)
 
 The architecture of the network is also inspired from the work of DeepMind researchers. The same convolutional layers are used in the first part of the network. They are followed by a linear layer of 512 neurons with a ReLu activation. The actor is composed of a fully connected layer with as many neurons as possible actions. The critic in only one neuron connected to the former fully connected layer.
-
-</details>
-
 
 ---
 ### 🎮 Demo
@@ -117,10 +114,37 @@ $
 
 $c_{actor}$ and $c_{critic}$ are hyperparameters adjusting the balance with the critic and the actor optimization. According to the literature, we used $c_{actor}=1$ and $c_{critic}=0.5$ throughout training.  
 
-We train the agent using SGD with the Adam optimizer and a learning rate of $2.5 \times 10^{-4}$
+We train the agent using SGD with the Adam optimizer and a learning rate of $2.5 \times 10^{-4}$  
+
+**Result** :  
+Training is very slow, and never reaches average return above 10 (a few broken bricks) when evaluating the agent (greedy actions).
 
 ---
 
 - #### Version 2:
 
-In Progress
+This version improved the loss function to include an entropy term to encourage exploration :   
+$- c_{entropy} \sum_a \pi_\theta(a|s) \log \pi_\theta(a|s)$  
+
+
+**Result :**  
+We achieve better performance, but average return seems to cap around an average return of 10 while training and 30 while evaluating. We tried reducing the entropy loss so that the agent starts exploiting more and learns to behave in longer episodes, but this made the policy very unstable. That is what we can see on the graphs after episode 27000. The agent quickly learned to exploit what is had already learned (same average return as in evaluation mode) but could not surpass this level and even experienced performance drop after a few episodes.
+
+<br>
+
+<figure style="text-align: center;">
+  <div style="display: flex; justify-content: center; gap: 20px; flex-wrap: wrap;">
+    <img src="images/a2c_v2_average_return.png" width="300" />
+    <img src="images/a2c_v2_value.png" width="300" />
+  </div>
+  <figcaption>Average return and value during training</figcaption>
+</figure>
+
+---
+
+- #### Version 3:
+
+This version added gradient clipping as a response to the last version instability.   
+Weights of the loss function have also been adjusted to make the actor more dominant over the critic.
+
+</details>
