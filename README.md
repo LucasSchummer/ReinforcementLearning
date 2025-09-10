@@ -10,9 +10,13 @@ The implementations are based on the theoretical foundations presented in the bo
 
 <br>
 
-## Pong Reinforcement Learning Agent
+<details>
+<summary>
+    <h2 style="display:inline;">1. DQN for Pong</h2>
+</summary>
 
-This project implements a Deep Q-Learning (DQN) agent to play **Atari Pong** using the OpenAI Gym environment (`ALE/Pong-v5`).  
+<br>
+This project implements a Deep Q-Learning (DQN) agent to play Atari Pong using the OpenAI Gym environment (`ALE/Pong-v5`).  
 
 The agent is trained with handcrafted features extracted from frames (ball position and velocity, paddles  positions, player velocity).  
 Given the simplicity of the game, this approach is indeed very convenient as it allows the agent to access all relevant information from the raw frames while working with a much smaller and more manageable state space.
@@ -68,3 +72,55 @@ The state set used to compute this estimation has been sampled from $100$ indepe
 
 This plot shows the gradual improvement of the agent, both in estimating the state-action value function $Q_{\pi}(s,a)$ and improving the target policy $\pi$.
 After initially overestimating the state-action values, the average estimation reduces to a more reasonable value (around 0.5) considering the scale of the values. Then, the esimation slowly increases as the behaviour policy approaches the optimal policy $\pi_*$
+
+</details>
+
+<br>
+
+<details>
+<summary>
+    <h2 style="display:inline;">2. A2C for Breakout</h2>
+</summary>
+<br>
+
+This project implements an Advantage Actor-Critic (A2C) agent to play **Atari Breakout** using the OpenAI Gym environment (`ALE/Breakout-v5`).  
+
+The agent is trained using only the frames from the game, which are preprocessed according to the methodology presented in the following paper :
+
+> Volodymyr Mnih, Koray Kavukcuoglu, David Silver, Andrei A. Rusu, Joel Veness, Marc G. Bellemare, Alex Graves, Martin Riedmiller, Andreas K. Fidjeland, Georg Ostrovski, Stig Petersen, Charles Beattie, Amir Sadik, Ioannis Antonoglou, Helen King, Dharshan Kumaran, Daan Wierstra, Shane Legg, and Demis Hassabis,  
+> *Human-level control through deep reinforcement learning*, Nature, vol. 518, no. 7540, pp. 529–533, 2015.  
+> [https://doi.org/10.1038/nature14236](https://doi.org/10.1038/nature14236)
+
+The architecture of the network is also inspired from the work of DeepMind researchers. The same convolutional layers are used in the first part of the network. They are followed by a linear layer of 512 neurons with a ReLu activation. The actor is composed of a fully connected layer with as many neurons as possible actions. The critic in only one neuron connected to the former fully connected layer.
+
+</details>
+
+
+---
+### 🎮 Demo
+
+Work in Progress...
+
+---
+
+### 📜 Version History
+
+- #### Version 1 :
+
+The first version implemented the architecture of the Advantage Actor Critic (A2C) agent using convolutional layers to deal with raw frames input.  
+The algorithm is optimized using Stochastic Gradient Descent with respect to the following loss function :
+
+$\mathcal{L}(\theta, w) \;=\; 
+\underbrace{- c_{actor} \mathbb{E}_{t} \Big[ \log \pi_\theta(a_t \mid s_t) \, A_t \Big]}_{\text{Actor loss}} 
+\;+ \underbrace{\tfrac{1}{2} \, c_{critic} \mathbb{E}_{t} \Big[ \big( R_t - V_w(s_t) \big)^2 \Big]}_{\text{Critic loss}} 
+$  
+
+$c_{actor}$ and $c_{critic}$ are hyperparameters adjusting the balance with the critic and the actor optimization. According to the literature, we used $c_{actor}=1$ and $c_{critic}=0.5$ throughout training.  
+
+We train the agent using SGD with the Adam optimizer and a learning rate of $2.5 \times 10^{-4}$
+
+---
+
+- #### Version 2:
+
+In Progress
