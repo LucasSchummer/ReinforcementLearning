@@ -31,7 +31,7 @@ class A2C(nn.Module):
             return actor_logits, value
       
 
-def update_network(optimizer, logits, log_probs, values, rewards, next_values, dones, gamma, c_actor, c_critic, c_entropy):
+def update_network(model, optimizer, logits, log_probs, values, rewards, next_values, dones, gamma, c_actor, c_critic, c_entropy, max_grad_norm):
 
     rewards = torch.tensor(rewards, dtype=torch.float32)
     dones = torch.tensor(dones, dtype=torch.float32)
@@ -50,4 +50,5 @@ def update_network(optimizer, logits, log_probs, values, rewards, next_values, d
 
     optimizer.zero_grad()
     loss.backward()
+    torch.nn.utils.clip_grad_norm_(model.parameters(), max_grad_norm)
     optimizer.step()

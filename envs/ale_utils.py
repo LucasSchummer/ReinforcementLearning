@@ -43,13 +43,14 @@ def setup_training_dir(resume_training, algo, version):
     return training_number
 
 
-def save_checkpoint(model, optimizer, returns, avg_values, episode, filename="checkpoint.pth"):
+def save_checkpoint(model, optimizer, returns, avg_values, episode, timestep, filename="checkpoint.pth"):
     checkpoint = {
         "model": model.state_dict(),
         "optimizer": optimizer.state_dict(),
         "returns" : returns,
         "avg_values" : avg_values,
         "episode": episode,
+        "timestep" : timestep
     }
     torch.save(checkpoint, filename)
     # print(f"Checkpoint saved to {filename}")
@@ -64,9 +65,10 @@ def load_checkpoint(model, optimizer, filename="checkpoint.pth", device="cpu"):
     returns = checkpoint['returns']
     avg_values = checkpoint['avg_values']
     episode = checkpoint["episode"] + 1
+    timestep = checkpoint['timestep']
 
     # print(f"Checkpoint loaded from {filename}, resuming at episode {episode}")
-    return returns, avg_values, episode
+    return returns, avg_values, episode, timestep
 
 
 def generate_video(env, model, frame_stack, n_episodes, max_timesteps, filename, greedy=True):
