@@ -10,6 +10,130 @@ import imageio
 from collections import deque
 
 
+class FrameStack:
+    def __init__(self, num_envs, frame_stack, height=84, width=84, device="cpu"):
+        self.num_envs = num_envs
+        self.frame_stack = frame_stack
+        self.height = height
+        self.width = width
+        self.device = device
+
+        # Buffer: (num_envs, frame_stack, height, width)
+        self.frames = np.zeros((num_envs, frame_stack, height, width), dtype=np.float32)
+
+    def reset(self, first_obs):
+        """
+        Called after env.reset() -> fill all frames with the first observation.
+        first_obs: (num_envs, height, width) already preprocessed (grayscale, 84x84).
+        """
+        if first_obs.ndim == 3:  # (H, W, C)
+            first_obs = np.expand_dims(first_obs, axis=0) 
+
+        phi_frames = self.preprocess_frames(first_obs)
+        for i in range(self.frame_stack):
+            self.frames[:, i] = phi_frames
+        return torch.tensor(self.frames, device=self.device)
+
+    def step(self, new_frames):
+        """
+        Called after env.step() -> preprocess and add new obs and shift frames.
+        new_obs: (num_envs, height, width, 3) raw frames.
+        """
+        if new_frames.ndim == 3:  # (H, W, C)
+            new_frames = np.expand_dims(new_frames, axis=0) 
+
+        phi_frames = self.preprocess_frames(new_frames)
+        self.frames[:, :-1] = self.frames[:, 1:]  # shift left
+        self.frames[:, -1] = phi_frames              # insert new frame
+        return torch.tensor(self.frames, device=self.device)
+    
+    def preprocess_frames(self, new_frames):
+
+        n_env = new_frames.shape[0]
+        phi_frames = np.zeros((n_env, 84, 84), dtype=np.float32)
+
+        for i in range(n_env):
+            gray = cv.cvtColor(new_frames[i], cv.COLOR_RGB2GRAY)
+            resized = cv.resize(gray, (84, 84), interpolation=cv.INTER_AREA)
+            phi_frames[i] = resized.astype(np.float32) / 255.0
+
+        return phi_frames
+
+
+def eval_model(model, env_name, n_episodes_eval, device):
+
+    model.eval()
+    env = gym.make(env_name)
+    returns = [run_eval_episode(env, model, device) for _ in range(n_episodes_eval)]
+    env.close()
+
+    model.train()
+
+    return np.mean(returns)
+
+def run_eval_episode(env, model, device):
+
+    tot_reward = 0
+    done = False
+    framestack = FrameStack(1, 4, 84, 84, device)
+
+    obs, infos = env.reset()
+    state = framestack.reset(obs)
+    current_lives = infos['lives'] + 1
+
+    with torch.no_grad():
+        while not done:
+
+            actor_logits, value = model(state)
+            action = actor_logits.argmax(dim=-1).item()
+
+            if infos['lives'] < current_lives:
+                current_lives = infos['lives']
+                action = 1
+
+            obs, reward, terminated, truncated, infos = env.step(action)
+            done = terminated or truncated
+            tot_reward += reward
+            state = framestack.step(obs)
+    
+    return tot_reward
+    
+def generate_video(model, env_name, filename, device):
+
+    model.eval()
+    env = gym.make(env_name)
+    frames = []
+    
+    with torch.no_grad():
+        
+        framestack = FrameStack(1, 4, 84, 84, device)
+
+        obs, infos = env.reset()
+        state = framestack.reset(obs)
+        current_lives = infos['lives'] + 1
+        done = False
+
+        while not done:
+
+            actor_logits, value = model(state)
+            action = actor_logits.argmax(dim=-1).item()
+
+            if infos['lives'] < current_lives:
+                current_lives = infos['lives']
+                action = 1
+
+            obs, reward, terminated, truncated, infos = env.step(action)
+            frames.append(cv.resize(obs, (160, 224)))
+            done = terminated or truncated
+            state = framestack.step(obs)
+
+    
+    imageio.mimsave(filename, frames, fps=30)
+
+    env.close()
+    model.train()
+
+
 def preprocess_frame(frame):
     
     phi_frame = cv.cvtColor(frame, cv.COLOR_RGB2GRAY)
@@ -17,12 +141,13 @@ def preprocess_frame(frame):
 
     return phi_frame
 
-def get_state(last_frames):
+
+def get_state(last_frames, device):
 
     state = np.stack(last_frames, axis=0)  # shape: (4, 84, 84)
     state = state.astype(np.float32)
     state /= 255.0 # Normalize to [0,1]
-    state = torch.from_numpy(state).unsqueeze(0).to("cpu") # shape : (1, 4, 84, 84)
+    state = torch.from_numpy(state).unsqueeze(0).to(device) # shape : (1, 4, 84, 84)
     
     return state
 
@@ -42,18 +167,15 @@ def setup_training_dir(resume_training, algo, version):
     os.makedirs(f"training/{algo}/{version}/training{training_number}", exist_ok=True)
     return training_number
 
-
-def save_checkpoint(model, optimizer, returns, avg_values, episode, timestep, filename="checkpoint.pth"):
+def save_checkpoint(model, optimizer, timestep, losses, avg_returns, filename="checkpoint.pth"):
     checkpoint = {
         "model": model.state_dict(),
         "optimizer": optimizer.state_dict(),
-        "returns" : returns,
-        "avg_values" : avg_values,
-        "episode": episode,
-        "timestep" : timestep
+        "timestep" : timestep,
+        "losses" : losses,
+        "avg_returns" : avg_returns
     }
     torch.save(checkpoint, filename)
-    # print(f"Checkpoint saved to {filename}")
 
 
 def load_checkpoint(model, optimizer, filename="checkpoint.pth", device="cpu"):
@@ -62,100 +184,203 @@ def load_checkpoint(model, optimizer, filename="checkpoint.pth", device="cpu"):
     model.load_state_dict(checkpoint["model"])
     optimizer.load_state_dict(checkpoint["optimizer"])
 
-    returns = checkpoint['returns']
-    avg_values = checkpoint['avg_values']
-    episode = checkpoint["episode"] + 1
     timestep = checkpoint['timestep']
+    losses = checkpoint['losses']
+    avg_returns = checkpoint['avg_returns']
 
-    # print(f"Checkpoint loaded from {filename}, resuming at episode {episode}")
-    return returns, avg_values, episode, timestep
-
-
-def generate_video(env, model, frame_stack, n_episodes, max_timesteps, filename, greedy=True):
-
-    model.eval()
-    frames = []
-    
-    with torch.no_grad():
-        for episode in range(n_episodes):
-
-            last_frames = deque(maxlen=frame_stack)
-
-            frame, info = env.reset()
-            current_lives = info['lives']
-            phi_frame = preprocess_frame(frame)
-            frames.append(cv.resize(frame, (160, 224)))
-
-            for _ in range(frame_stack):
-                last_frames.append(phi_frame)
-
-            # Play FIRE on the first frame to start the game
-            frame, reward, done, truncated, info = env.step(1)
-            frames.append(cv.resize(frame, (160, 224)))
-            phi_frame = preprocess_frame(frame)
-            last_frames.append(phi_frame)
-
-            state = get_state(last_frames)
-
-            done = False
-            doFire = False
-            i = 0
-            while not done:
-
-                actor_logits, value = model(state)
-                i += 1
-                if greedy:
-                    action = actor_logits.argmax(dim=-1).item()
-                else:
-                    m = torch.distributions.Categorical(logits=actor_logits)
-                    action = m.sample().item()
-
-                if doFire:
-                    action = 1
-                    doFire = False
-
-                frame, reward, done, truncated, info = env.step(action)
-                if info['lives'] < current_lives: # If just lost a life, play fire on next frame to launch the game back
-                    current_lives = info['lives']
-                    doFire = True
-
-                frames.append(cv.resize(frame, (160, 224)))
-                phi_frame = preprocess_frame(frame)
-                last_frames.append(phi_frame) # Automatically removes the oldest frame
-                state = get_state(last_frames)
-
-                if i > max_timesteps:
-                    break
-
-    
-    imageio.mimsave(filename, frames, fps=30)
-
-    model.train()
+    return  timestep, losses, avg_returns
 
 
-def save_plots(returns, avg_values, episode, path):
+def save_plots(losses, avg_returns, path, timestep, eval_frequency):
 
     for file in glob.glob(f"{path}/*.png"): os.remove(file)
+
+    losses, actor_losses, critic_losses, entropies = tuple(zip(*losses))
+
+    losses = np.array(losses)
+    actor_losses = np.array(actor_losses)
+    critic_losses = np.array(critic_losses)
+    entropies = np.array(entropies)
+
+    # Optionally apply a simple moving average for smoother curves
+    def moving_average(x, window=50):
+        if len(x) < window:
+            return x
+        return np.convolve(x, np.ones(window)/window, mode='valid')
+
+    # Plot
+    plt.figure(figsize=(14, 8))
+
+    # Total loss
+    plt.subplot(2, 2, 1)
+    plt.plot(losses, label="Total Loss", alpha=0.7)
+    plt.plot(moving_average(losses), label="Smoothed", linewidth=2)
+    plt.xlabel("Updates")
+    plt.ylabel("Loss")
+    plt.legend()
+    plt.title("Total Loss")
+
+    # Actor loss
+    plt.subplot(2, 2, 2)
+    plt.plot(actor_losses, label="Actor Loss", alpha=0.7)
+    plt.plot(moving_average(actor_losses), label="Smoothed", linewidth=2)
+    plt.xlabel("Updates")
+    plt.ylabel("Loss")
+    plt.legend()
+    plt.title("Actor Loss")
+
+    # Critic loss
+    plt.subplot(2, 2, 3)
+    plt.plot(critic_losses, label="Critic Loss", alpha=0.7)
+    plt.plot(moving_average(critic_losses), label="Smoothed", linewidth=2)
+    plt.xlabel("Updates")
+    plt.ylabel("Loss")
+    plt.legend()
+    plt.title("Critic Loss")
+
+    # Entropy
+    plt.subplot(2, 2, 4)
+    plt.plot(entropies, label="Entropy", alpha=0.7)
+    plt.plot(moving_average(entropies), label="Smoothed", linewidth=2)
+    plt.xlabel("Updates")
+    plt.ylabel("Entropy")
+    plt.legend()
+    plt.title("Entropy")
+
+    plt.tight_layout()
+
+    plt.savefig(f"{path}/losses_{timestep}.png", dpi=300, bbox_inches="tight")
+    plt.close()
+
+
+    plt.figure(figsize=(8, 8))
+    timesteps = np.arange(1, len(avg_returns)+1) * eval_frequency
+    smoothed = moving_average(avg_returns, window=10)
+    smoothed_timesteps = timesteps[len(timesteps) - len(smoothed):]
+    plt.plot(timesteps, avg_returns, label="Average return", alpha=0.7)
+    plt.plot(smoothed_timesteps, smoothed, label="Smoothed", linewidth=2)
+    plt.xlabel("Timesteps")
+    plt.ylabel("Average return")
+    plt.legend()
+    plt.title("Average return per episode")
+
+    plt.savefig(f"{path}/return_{timestep}.png", dpi=300, bbox_inches="tight")
+    plt.close()
+
+
+# def save_checkpoint(model, optimizer, returns, avg_values, episode, timestep, filename="checkpoint.pth"):
+#     checkpoint = {
+#         "model": model.state_dict(),
+#         "optimizer": optimizer.state_dict(),
+#         "returns" : returns,
+#         "avg_values" : avg_values,
+#         "episode": episode,
+#         "timestep" : timestep
+#     }
+#     torch.save(checkpoint, filename)
+#     # print(f"Checkpoint saved to {filename}")
+
+
+# def load_checkpoint(model, optimizer, filename="checkpoint.pth", device="cpu"):
+#     checkpoint = torch.load(filename, map_location=device, weights_only=False)
+
+#     model.load_state_dict(checkpoint["model"])
+#     optimizer.load_state_dict(checkpoint["optimizer"])
+
+#     returns = checkpoint['returns']
+#     avg_values = checkpoint['avg_values']
+#     episode = checkpoint["episode"] + 1
+#     timestep = checkpoint['timestep']
+
+#     # print(f"Checkpoint loaded from {filename}, resuming at episode {episode}")
+#     return returns, avg_values, episode, timestep
+
+
+# def generate_video(env, model, frame_stack, n_episodes, max_timesteps, filename, greedy=True):
+
+#     model.eval()
+#     frames = []
     
-    fig1, ax1 = plt.subplots()
-    avg_returns = [np.mean(returns[i-100:i]) for i in range(100, len(returns))]
-    ax1.plot(range(100, len(returns)), avg_returns)
-    ax1.set_title("Average return per episode (100 last episodes)")
-    ax1.set_xlabel("Episodes")
-    ax1.set_ylabel("Average Return")
+#     with torch.no_grad():
+#         for episode in range(n_episodes):
+
+#             last_frames = deque(maxlen=frame_stack)
+
+#             frame, info = env.reset()
+#             current_lives = info['lives']
+#             phi_frame = preprocess_frame(frame)
+#             frames.append(cv.resize(frame, (160, 224)))
+
+#             for _ in range(frame_stack):
+#                 last_frames.append(phi_frame)
+
+#             # Play FIRE on the first frame to start the game
+#             frame, reward, done, truncated, info = env.step(1)
+#             frames.append(cv.resize(frame, (160, 224)))
+#             phi_frame = preprocess_frame(frame)
+#             last_frames.append(phi_frame)
+
+#             state = get_state(last_frames)
+
+#             done = False
+#             doFire = False
+#             i = 0
+#             while not done:
+
+#                 actor_logits, value = model(state)
+#                 i += 1
+#                 if greedy:
+#                     action = actor_logits.argmax(dim=-1).item()
+#                 else:
+#                     m = torch.distributions.Categorical(logits=actor_logits)
+#                     action = m.sample().item()
+
+#                 if doFire:
+#                     action = 1
+#                     doFire = False
+
+#                 frame, reward, done, truncated, info = env.step(action)
+#                 if info['lives'] < current_lives: # If just lost a life, play fire on next frame to launch the game back
+#                     current_lives = info['lives']
+#                     doFire = True
+
+#                 frames.append(cv.resize(frame, (160, 224)))
+#                 phi_frame = preprocess_frame(frame)
+#                 last_frames.append(phi_frame) # Automatically removes the oldest frame
+#                 state = get_state(last_frames)
+
+#                 if i > max_timesteps:
+#                     break
 
     
-    fig2, ax2 = plt.subplots()
-    moving_avg_values = [np.mean(avg_values[i-100:i]) for i in range(100, len(avg_values))]
-    ax2.plot(range(100, len(avg_values)), moving_avg_values)
-    ax2.set_title("Average value (moving average on last 100 episodes)")
-    ax2.set_xlabel("Episodes")
-    ax2.set_ylabel("Average value")
+#     imageio.mimsave(filename, frames, fps=30)
 
-    fig1.savefig(f"{path}/return_{episode}.png")
-    fig2.savefig(f"{path}/value_{episode}.png")
-    plt.close(fig1)
-    plt.close(fig2)
+#     model.train()
+
+
+# def save_plots(returns, avg_values, episode, path):
+
+#     for file in glob.glob(f"{path}/*.png"): os.remove(file)
+    
+#     fig1, ax1 = plt.subplots()
+#     avg_returns = [np.mean(returns[i-100:i]) for i in range(100, len(returns))]
+#     ax1.plot(range(100, len(returns)), avg_returns)
+#     ax1.set_title("Average return per episode (100 last episodes)")
+#     ax1.set_xlabel("Episodes")
+#     ax1.set_ylabel("Average Return")
+
+    
+#     fig2, ax2 = plt.subplots()
+#     moving_avg_values = [np.mean(avg_values[i-100:i]) for i in range(100, len(avg_values))]
+#     ax2.plot(range(100, len(avg_values)), moving_avg_values)
+#     ax2.set_title("Average value (moving average on last 100 episodes)")
+#     ax2.set_xlabel("Episodes")
+#     ax2.set_ylabel("Average value")
+
+#     fig1.savefig(f"{path}/return_{episode}.png")
+#     fig2.savefig(f"{path}/value_{episode}.png")
+#     plt.close(fig1)
+#     plt.close(fig2)
 
 
 def play_manual_breakout(save_probability=.1):
