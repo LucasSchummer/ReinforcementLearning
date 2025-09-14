@@ -71,28 +71,3 @@ class A2C(nn.Module):
 
         return (loss.item(), actor_loss.item(), critic_loss.item(), entropy.item())
 
-
-
-def update_network(model, optimizer, device, logits, log_probs, values, rewards, next_values, dones, gamma, c_actor, c_critic, c_entropy, max_grad_norm):
-
-    rewards = torch.tensor(rewards, dtype=torch.float32, device=device)
-    dones = torch.tensor(dones, dtype=torch.float32, device=device)
-    values = torch.stack(values).to(device)
-    next_values = torch.stack(next_values).to(device)
-    log_probs = torch.stack(log_probs).to(device)
-    logits_tensor = torch.stack(logits).to(device)
-
-    target = rewards + (1 - dones) * gamma * next_values
-    advantages = target - values
- 
-    entropy = torch.distributions.Categorical(logits=logits_tensor).entropy().mean()
-
-    critic_loss = 0.5 * advantages.pow(2).mean()
-    actor_loss = - (log_probs * advantages.detach()).mean() # No grad through advantage
-
-    loss = c_critic * critic_loss + c_actor * actor_loss - c_entropy * entropy
-
-    optimizer.zero_grad()
-    loss.backward()
-    torch.nn.utils.clip_grad_norm_(model.parameters(), max_grad_norm)
-    optimizer.step()

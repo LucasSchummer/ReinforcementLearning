@@ -1,6 +1,6 @@
 # Reinforcement Learning on simulated environments
 
-This project aims to implement and compare various **Reinforcement Learning (RL)** algorithms to solve different simulated environments (Arcade Learning Environments / Pybullet) using the Gymnasium API.  
+This project aims to implement and compare various **Reinforcement Learning (RL)** algorithms to solve different simulated environments (Arcade Learning Environments) using the Gymnasium API.  
 
 The implementations are based on the theoretical foundations presented in the book:
 
@@ -125,6 +125,8 @@ Training is very slow, and never reaches average return above 10 (a few broken b
 
 This version improved the loss function to include an entropy term to encourage exploration :   
 $- c_{entropy} \sum_a \pi_\theta(a|s) \log \pi_\theta(a|s)$  
+We also added gradient clipping to avoid too large training steps and reduce the policy instability.  
+Weights of the loss function have also been adjusted to make the actor more dominant over the critic.
 
 
 **Result :**  
@@ -144,7 +146,9 @@ We achieve better performance, but average return seems to cap around an average
 
 - #### Version 3:
 
-This version added gradient clipping as a response to the last version instability.   
-Weights of the loss function have also been adjusted to make the actor more dominant over the critic.
+This version added the handling of parallel environments to generate data. This multi-env setting greatly reduces the noise in the gradient estimates by lessening the correlation between samples. We can safely increase the batch size and speed-up the training process. To make it even faster, the whole code had been revised to handle GPU-computations, which are known to be very effective.
+
+**Result :**  
+Work in progress...
 
 </details>
