@@ -96,7 +96,7 @@ The architecture of the network is also inspired from the work of DeepMind resea
 ---
 ### 🎮 Demo
 
-Work in Progress...
+![Demo](images/breakout.gif)
 
 ---
 
@@ -149,6 +149,19 @@ We achieve better performance, but average return seems to cap around an average
 This version added the handling of parallel environments to generate data. This multi-env setting greatly reduces the noise in the gradient estimates by lessening the correlation between samples. We can safely increase the batch size and speed-up the training process. To make it even faster, the whole code had been revised to handle GPU-computations, which are known to be very effective.
 
 **Result :**  
-Work in progress...
+As we can see on the graph, we manage to achieve greater performance with parallel environments (8 in this case). After 2M timesteps (8M game timesteps), the agent scores around 100 points per episode in evaluation (greedy) mode. However, training seems to become noisy after this point, and the policy never reacher stable better level.  
+
+Even though the agent is still not able to completely solve the environment, it clearly achieves superhuman performance. Indeed, according to the DeepMind paper inspiring this work, the professional game tester level is around 31 per episode.  
+
+<figure style="text-align: center;">
+  <div style="display: flex; justify-content: center; gap: 20px; flex-wrap: wrap;">
+    <img src="images/a2c_v3_average_return.png" width="300" />
+  </div>
+  <figcaption>Average return during training</figcaption>
+</figure>
+
+Better performance may still be achievable with A2C, but would require hyperparameter tuning. But considering the very limited ressources available, this is beyond the scope of this project.  
+
+The video shown in the DEMO section does not reflect the average performance of the model, as it one of the best recorded episodes. However it shows that the agent is able to achieve very good performance and discover interesting strategies. For example we can see that the agent learned to bounce the ball above the bricks in the late-game, collecting a lot of rewards. 
 
 </details>

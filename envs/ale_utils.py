@@ -136,16 +136,6 @@ def generate_video(model, env_name, filename, device):
     model.train()
 
 
-def setup_training_dir(resume_training, algo, version):
-    training_numbers = [int(folder.split("training")[-1]) for folder in glob.glob(f"training/a2c/{version}/*")]
-    if resume_training:
-        training_number = max(training_numbers)
-    else:
-        training_number = max(training_numbers) + 1 if len(training_numbers) > 0 else 1
-    os.makedirs(f"training/{algo}/{version}/training{training_number}", exist_ok=True)
-    return training_number
-
-
 def save_checkpoint(model, optimizer, timestep, losses, avg_returns, filename="checkpoint.pth"):
     checkpoint = {
         "model": model.state_dict(),
