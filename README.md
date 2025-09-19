@@ -1,6 +1,10 @@
 # Reinforcement Learning on simulated environments
 
-This project aims to implement and compare various **Reinforcement Learning (RL)** algorithms to solve different simulated environments (Arcade Learning Environments) using the Gymnasium API.  
+This project aims to implement and compare various **Reinforcement Learning (RL)** algorithms to solve different simulated environments using the Gymnasium API.  
+The experiments cover two main domains : 
+
+- **Atari Games** ([Arcade Learning Environment](https://ale.farama.org/index.html))
+- **Robotic Tasks** ([panda-gym](https://panda-gym.readthedocs.io/en/latest/) based on [PyBullet](https://pybullet.org/wordpress/) physics engine)
 
 The implementations are based on the theoretical foundations presented in the book:
 
@@ -10,10 +14,15 @@ The implementations are based on the theoretical foundations presented in the bo
 
 <br>
 
-<details>
-<summary>
-    <h2 style="display:inline;">1. DQN for Pong</h2>
-</summary>
+<h2>Table of Contents</h2>
+
+- <h3><a href="#DQN">DQN for Pong</a></h3>
+- <h3><a href="#A2C">A2C for Breakout</a></h3>
+- <h3><a href="#SAC">SAC for Robotic tasks</a></h3>
+
+<br>
+
+<h2 id="DQN">1. DQN for Pong</h2>
 
 <br>
 This project implements a Deep Q-Learning (DQN) agent to play Atari Pong using Arcade Learning Environments (`ALE/Pong-v5`).  
@@ -73,14 +82,10 @@ The state set used to compute this estimation has been sampled from $100$ indepe
 This plot shows the gradual improvement of the agent, both in estimating the state-action value function $Q_{\pi}(s,a)$ and improving the target policy $\pi$.
 After initially overestimating the state-action values, the average estimation reduces to a more reasonable value (around 0.5) considering the scale of the values. Then, the esimation slowly increases as the behaviour policy approaches the optimal policy $\pi_*$
 
-</details>
-
 <br>
 
-<details>
-<summary>
-    <h2 style="display:inline;">2. A2C for Breakout</h2>
-</summary>
+<h2 id="A2C">2. A2C for Breakout</h2>
+
 <br>
 
 This project implements an Advantage Actor-Critic (A2C) agent to play **Atari Breakout** using Arcade Learning Environments (`ALE/Breakout-v5`).  
@@ -164,4 +169,9 @@ Better performance may still be achievable with A2C, but would require hyperpara
 
 The video shown in the DEMO section does not reflect the average performance of the model, as it one of the best recorded episodes. However it shows that the agent is able to achieve very good performance and discover interesting strategies. For example we can see that the agent learned to bounce the ball above the bricks in the late-game, collecting a lot of rewards. 
 
-</details>
+
+<br>
+
+<h2 id="SAC">3. SAC for Robotic Tasks</h2>
+
+<br>
