@@ -112,10 +112,11 @@ The architecture of the network is also inspired from the work of DeepMind resea
 The first version implemented the architecture of the Advantage Actor Critic (A2C) agent using convolutional layers to deal with raw frames input.  
 The algorithm is optimized using Stochastic Gradient Descent with respect to the following loss function :
 
-$\mathcal{L}(\theta, w) \;=\; 
-\underbrace{- c_{actor} \mathbb{E}_{t} \Big[ \log \pi_\theta(a_t \mid s_t) \, A_t \Big]}_{\text{Actor loss}} 
-\;+ \underbrace{\tfrac{1}{2} \, c_{critic} \mathbb{E}_{t} \Big[ \big( R_t - V_w(s_t) \big)^2 \Big]}_{\text{Critic loss}} 
-$  
+$$
+\mathcal{L}(\theta, w) = 
+- c_{actor} \mathbb{E}_{t} [ \log \pi_\theta(a_t \mid s_t) \, A_t ] 
++ \frac{1}{2} \, c_{critic} \mathbb{E}_{t} [ ( R_t - V_w(s_t) )^2 ] \ 
+$$
 
 $c_{actor}$ and $c_{critic}$ are hyperparameters adjusting the balance with the critic and the actor optimization. According to the literature, we used $c_{actor}=1$ and $c_{critic}=0.5$ throughout training.  
 
@@ -139,13 +140,12 @@ We achieve better performance, but average return seems to cap around an average
 
 <br>
 
-<figure style="text-align: center;">
-  <div style="display: flex; justify-content: center; gap: 20px; flex-wrap: wrap;">
-    <img src="images/a2c_v2_average_return.png" width="300" />
-    <img src="images/a2c_v2_value.png" width="300" />
-  </div>
-  <figcaption>Average return and value during training</figcaption>
-</figure>
+<p align="center">
+  <img src="images/a2c_v2_average_return.png" width="300" />
+  <img src="images/a2c_v2_value.png" width="300" />
+</p>
+
+<p align="center"><b>Average return and value during training</b></p>
 
 ---
 
@@ -158,12 +158,12 @@ As we can see on the graph, we manage to achieve greater performance with parall
 
 Even though the agent is still not able to completely solve the environment, it clearly achieves superhuman performance. Indeed, according to the DeepMind paper inspiring this work, the professional game tester level is around 31 per episode.  
 
-<figure style="text-align: center;">
-  <div style="display: flex; justify-content: center; gap: 20px; flex-wrap: wrap;">
-    <img src="images/a2c_v3_average_return.png" width="300" />
-  </div>
-  <figcaption>Average return during training</figcaption>
-</figure>
+
+<p align="center">
+  <img src="images/a2c_v3_average_return.png" width="300" />
+</p>
+
+<p align="center"><b>Average return during training</b></p>
 
 Better performance may still be achievable with A2C, but would require hyperparameter tuning. But considering the very limited ressources available, this is beyond the scope of this project.  
 
