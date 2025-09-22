@@ -60,7 +60,10 @@ This project was originally inspired by the following paper :
 
 **1. Training reward**  
 
-![Training Reward](images/dqn_av_return.png)
+<p align="center">
+  <img src="images/dqn_av_return.png" width="300" />
+</p>
+
 
 This plot shows the evolution of the average reward per episode during training.  
 We can see that the average reward obtained while training increased a lot in the first 1000 episodes, and then increased very slowly, stabilizing to small positive values.  
@@ -73,7 +76,9 @@ However, this doesn't mean that the agent stopped learning during the second hal
 
 **2. Average Estimated Q_values**  
 
-![Training Reward](images/dqn_av_q_value.png)
+<p align="center">
+  <img src="images/dqn_av_q_value.png" width="300" />
+</p>
 
 This plot shows the evolution of the average estimates Q_values $\hat{Q}(s,a)$ on a given set of states during training. ($y = \frac{1}{N_{states}} \sum_{s \in S} {\frac{1}{n_a}} \sum_{a \in A}{\hat{Q}(s,a)}$)
 
@@ -101,7 +106,10 @@ The architecture of the network is also inspired from the work of DeepMind resea
 ---
 ### 🎮 Demo
 
-![Demo](images/breakout.gif)
+<p align="center">
+  <img src="images/breakout.gif" width="300" />
+</p>
+
 
 ---
 
