@@ -7,9 +7,9 @@ import imageio
 import glob
 import os
 
-def eval_model(model, env_name, n_episodes_eval):
+def eval_model(model, env_name, max_episode_steps, n_episodes_eval):
 
-    env = gym.make(env_name)
+    env = gym.make(env_name, max_episode_steps=max_episode_steps)
     returns = [run_eval_episode(env, model) for _ in range(n_episodes_eval)]
     env.close()
 
@@ -35,9 +35,9 @@ def run_eval_episode(env, model):
     
     return tot_reward
 
-def generate_video(env_name, model, n_episodes, deterministic, filename):
+def generate_video(env_name, max_episode_steps, model, n_episodes, deterministic, filename):
 
-    env = gym.make(env_name, render_mode="rgb_array")
+    env = gym.make(env_name, render_mode="rgb_array", max_episode_steps=max_episode_steps)
     frames = []
 
     with torch.no_grad():

@@ -174,4 +174,18 @@ The video shown in the DEMO section does not reflect the average performance of 
 
 <h2 id="SAC">3. SAC for Robotic Tasks</h2>
 
+This project aims to implement Soft-Actor-Critic to perform different basic tasks on a robotic arm. The environments and tasks are provided by the library <a href="https://panda-gym.readthedocs.io/en/latest/">panda-gym</a> that is built on <a href="https://pybullet.org/wordpress/">PyBullet</a> physics engine.  
+The implementation of SAC is based on the original paper : 
+
+> Tuomas Haarnoja, Aurick Zhou, Pieter Abbeel, Sergey Levine,  
+> *Soft Actor-Critic: Off-Policy Maximum Entropy Deep Reinforcement Learning with a Stochastic Actor*,  
+> *Proceedings of the 35th International Conference on Machine Learning (ICML)*,  
+> vol. 80, pp. 1856–1865, 2018.  
+> [https://proceedings.mlr.press/v80/haarnoja18b.html](https://proceedings.mlr.press/v80/haarnoja18b.html)
+
+
+### 3.1 Reach Task
+
+Work in progress...
+
 <br>

@@ -49,16 +49,16 @@ class SAC(nn.Module):
 
     def update(self, batch_size):
 
-        states, actions, rewards, next_states, dones = self.buffer.sample(batch_size)
+        states, actions, rewards, next_states, terminateds = self.buffer.sample(batch_size)
 
         states = torch.stack(states) # (batch_size, obs_size)
         next_states = torch.stack(next_states) # (batch_size, obs_size)
         actions = torch.as_tensor(np.array(actions), dtype=torch.float32, device=self.device) # (batch_size, action_size)
         rewards = torch.as_tensor(np.array(rewards), dtype=torch.float32, device=self.device).unsqueeze(1)  # (batch_size, 1)
-        dones = torch.as_tensor(np.array(dones), dtype=torch.float32, device=self.device).unsqueeze(1) # (batch_size, 1)
+        terminateds = torch.as_tensor(np.array(terminateds), dtype=torch.float32, device=self.device).unsqueeze(1) # (batch_size, 1)
 
         # Q_network update
-        q_target = (rewards + (1 - dones) * self.gamma * self.value_target(next_states)).detach()
+        q_target = (rewards + (1 - terminateds) * self.gamma * self.value_target(next_states)).detach()
 
         q1_value = self.q1(states, actions)
         q2_value = self.q2(states, actions)
