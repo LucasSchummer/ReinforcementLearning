@@ -4,10 +4,11 @@ import torch.nn.functional as F
 import numpy as np
 from collections import deque
 import random
+from envs.panda_utils import compute_reward
 
 class SAC(nn.Module):
 
-    def __init__(self, state_dim, action_dim, buffer_size, alpha, gamma, tau, lr, device):
+    def __init__(self, state_dim, action_dim, buffer_size, alpha, gamma, tau, lr, device, use_her=True, distance_threshold=.05):
         super().__init__()
 
         self.alpha = alpha
@@ -16,6 +17,9 @@ class SAC(nn.Module):
         self.device = device
 
         self.buffer = ReplayBuffer(buffer_size)
+        self.use_her = use_her
+        if use_her:
+            self.her = HER(distance_threshold)
 
         # Actor
         self.actor = Actor(state_dim, action_dim)
@@ -36,32 +40,48 @@ class SAC(nn.Module):
         self.actor_optimizer = torch.optim.Adam(self.actor.parameters(), lr = lr)
    
 
-    def act(self, state, deterministic=False):
+    def act(self, state_goal, deterministic=False):
 
-        action, _ = self.actor.sample(state, deterministic)
+        action, _ = self.actor.sample(state_goal, deterministic)
         return action.detach().numpy()
     
 
     def save_to_buffer(self, transition):
+        
+        state, goal, achieved_goal, action, reward, next_state, done = transition
 
-        self.buffer.put(transition)
-    
+        self.buffer.put((state, goal, action, reward, next_state, done))
+        if self.use_her:
+            self.her.put((state, achieved_goal, action, next_state, done))
+
+
+    def save_her_transitions(self, new_goal):
+
+        her_transitions = self.her.generate_new_transitions(new_goal)
+        for transition in her_transitions:
+            self.buffer.put(transition)
+
 
     def update(self, batch_size):
 
-        states, actions, rewards, next_states, terminateds = self.buffer.sample(batch_size)
+        states, goals, actions, rewards, next_states, terminateds = self.buffer.sample(batch_size)
 
-        states = torch.stack(states) # (batch_size, obs_size)
-        next_states = torch.stack(next_states) # (batch_size, obs_size)
+        states = torch.from_numpy(np.stack(states, axis=0)).to(self.device) # (batch_size, obs_size)
+        next_states = torch.from_numpy(np.stack(next_states, axis=0)).to(self.device) # (batch_size, obs_size)
+        goals = torch.from_numpy(np.stack(goals, axis=0)).to(self.device) # (batch_size, goal_size)
+
+        states_goals = torch.cat([states, goals], dim=-1)
+        next_states_goals = torch.cat([next_states, goals], dim=-1)
+
         actions = torch.as_tensor(np.array(actions), dtype=torch.float32, device=self.device) # (batch_size, action_size)
         rewards = torch.as_tensor(np.array(rewards), dtype=torch.float32, device=self.device).unsqueeze(1)  # (batch_size, 1)
         terminateds = torch.as_tensor(np.array(terminateds), dtype=torch.float32, device=self.device).unsqueeze(1) # (batch_size, 1)
 
         # Q_network update
-        q_target = (rewards + (1 - terminateds) * self.gamma * self.value_target(next_states)).detach()
+        q_target = (rewards + (1 - terminateds) * self.gamma * self.value_target(next_states_goals)).detach()
 
-        q1_value = self.q1(states, actions)
-        q2_value = self.q2(states, actions)
+        q1_value = self.q1(states_goals, actions)
+        q2_value = self.q2(states_goals, actions)
 
         q1_loss = F.mse_loss(q1_value, q_target)
         q2_loss = F.mse_loss(q2_value, q_target)
@@ -76,19 +96,19 @@ class SAC(nn.Module):
 
 
         # Value update
-        sampled_action, log_prob = self.actor.sample(states)
-        q_min = torch.min(self.q1(states, sampled_action), self.q2(states, sampled_action))
+        sampled_action, log_prob = self.actor.sample(states_goals)
+        q_min = torch.min(self.q1(states_goals, sampled_action), self.q2(states_goals, sampled_action))
         value_target = (q_min - self.alpha * log_prob).detach()
 
-        value_loss = F.mse_loss(self.value(states), value_target)
+        value_loss = F.mse_loss(self.value(states_goals), value_target)
         self.value_optimizer.zero_grad()
         value_loss.backward()
         self.value_optimizer.step()
 
 
         # Policy update
-        sampled_action, log_prob = self.actor.sample(states)
-        q_min = torch.min(self.q1(states, sampled_action), self.q2(states, sampled_action))
+        sampled_action, log_prob = self.actor.sample(states_goals)
+        q_min = torch.min(self.q1(states_goals, sampled_action), self.q2(states_goals, sampled_action))
         actor_loss = (self.alpha * log_prob - q_min).mean()
 
         self.actor_optimizer.zero_grad()
@@ -100,7 +120,7 @@ class SAC(nn.Module):
             target_param.data.copy_(self.tau * param.data + (1 - self.tau) * target_param.data)
 
 
-    def save_state(self, timestep, avg_returns, filename):
+    def save_state(self, timestep, avg_returns, avg_successes, filename):
             
         checkpoint = {
             "buffer": self.buffer.buffer,
@@ -114,7 +134,8 @@ class SAC(nn.Module):
             "value_optimizer": self.value_optimizer.state_dict(),
             "actor_optimizer": self.actor_optimizer.state_dict(),
             "timestep" : timestep,
-            "avg_returns" : avg_returns
+            "avg_returns" : avg_returns,
+            "avg_successes" : avg_successes
         }
         torch.save(checkpoint, filename)
 
@@ -135,8 +156,9 @@ class SAC(nn.Module):
         self.actor_optimizer.load_state_dict(checkpoint["actor_optimizer"])
         timestep = checkpoint["timestep"]
         avg_returns = checkpoint["avg_returns"]
+        avg_successes = checkpoint["avg_successes"]
 
-        return (timestep, avg_returns)
+        return (timestep, avg_returns, avg_successes)
 
 
 class Actor(nn.Module):
@@ -225,14 +247,38 @@ class ReplayBuffer():
 
     def sample(self, n):
         mini_batch = random.sample(self.buffer, n)
-        states, actions, rewards, next_states, dones = [], [], [], [], []
+        states, goals, actions, rewards, next_states, dones = [], [], [], [], [], []
 
         for transition in mini_batch:
-            state, action, reward, next_state, done= transition
+            state, goal, action, reward, next_state, done = transition
             states.append(state)
+            goals.append(goal)
             actions.append(action)
             rewards.append(reward)
             next_states.append(next_state)
             dones.append(done)
 
-        return states, actions, rewards, next_states, dones
+        return states, goals, actions, rewards, next_states, dones
+
+
+class HER():
+
+    def __init__(self, distance_threshold):
+        self.transitions = []
+        self.distance_threshold = distance_threshold
+
+    def put(self, transition):
+        self.transitions.append(transition)
+
+    def generate_new_transitions(self, new_goal):
+
+        new_transitions = []
+        for transition in self.transitions:
+
+            state, achieved_goal, action, next_state, done = transition
+            new_reward = compute_reward(achieved_goal, new_goal, self.distance_threshold)
+
+            new_transitions.append([state, new_goal, action, new_reward, next_state, done])
+
+        self.transitions = [] # Clear memory
+        return new_transitions
