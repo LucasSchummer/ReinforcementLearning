@@ -5,10 +5,11 @@ import numpy as np
 from collections import deque
 import random
 from envs.panda_utils import compute_reward
+from envs.utils import Normalizer
 
 class SAC(nn.Module):
 
-    def __init__(self, state_dim, action_dim, buffer_size, alpha, gamma, tau, lr, device, use_her=True, distance_threshold=.05):
+    def __init__(self, state_size, goal_size, action_dim, buffer_size, alpha, gamma, tau, lr, device, use_her=True, distance_threshold=.05):
         super().__init__()
 
         self.alpha = alpha
@@ -21,16 +22,21 @@ class SAC(nn.Module):
         if use_her:
             self.her = HER(distance_threshold)
 
+        self.state_normalizer = Normalizer(state_size)
+        self.goal_normalizer = Normalizer(goal_size)
+
+        state_goal_size = state_size + goal_size
+
         # Actor
-        self.actor = Actor(state_dim, action_dim)
+        self.actor = Actor(state_goal_size, action_dim)
 
         # Q Networks
-        self.q1 = Q_Critic(state_dim, action_dim)
-        self.q2 = Q_Critic(state_dim, action_dim)
+        self.q1 = Q_Critic(state_goal_size, action_dim)
+        self.q2 = Q_Critic(state_goal_size, action_dim)
 
         # Value Network and target
-        self.value = V_Critic(state_dim)
-        self.value_target = V_Critic(state_dim)
+        self.value = V_Critic(state_goal_size)
+        self.value_target = V_Critic(state_goal_size)
         self.value_target.load_state_dict(self.value.state_dict()) # Copy weights to target
 
         # Optimizers
@@ -66,12 +72,24 @@ class SAC(nn.Module):
 
         states, goals, actions, rewards, next_states, terminateds = self.buffer.sample(batch_size)
 
-        states = torch.from_numpy(np.stack(states, axis=0)).to(self.device) # (batch_size, obs_size)
-        next_states = torch.from_numpy(np.stack(next_states, axis=0)).to(self.device) # (batch_size, obs_size)
-        goals = torch.from_numpy(np.stack(goals, axis=0)).to(self.device) # (batch_size, goal_size)
+        states = np.stack(states, axis=0)       # (batch_size, obs_size)
+        next_states = np.stack(next_states, 0)  # (batch_size, obs_size)
+        goals = np.stack(goals, axis=0)  # (batch_size, goal_size)
+
+        self.state_normalizer.update(states)
+        self.goal_normalizer.update(goals)
+
+        states = self.state_normalizer.normalize(states)
+        next_states = self.state_normalizer.normalize(next_states)
+        goals = self.goal_normalizer.normalize(goals)
+
+        states = torch.as_tensor(states, dtype=torch.float32, device=self.device)
+        next_states = torch.as_tensor(next_states, dtype=torch.float32, device=self.device)
+        goals = torch.as_tensor(goals, dtype=torch.float32, device=self.device)
 
         states_goals = torch.cat([states, goals], dim=-1)
         next_states_goals = torch.cat([next_states, goals], dim=-1)
+
 
         actions = torch.as_tensor(np.array(actions), dtype=torch.float32, device=self.device) # (batch_size, action_size)
         rewards = torch.as_tensor(np.array(rewards), dtype=torch.float32, device=self.device).unsqueeze(1)  # (batch_size, 1)
@@ -124,6 +142,8 @@ class SAC(nn.Module):
             
         checkpoint = {
             "buffer": self.buffer.buffer,
+            "state_normalizer" : self.state_normalizer,
+            "goal_normalizer" : self.goal_normalizer,
             "actor": self.actor.state_dict(),
             "q1": self.q1.state_dict(),
             "q2": self.q2.state_dict(),
@@ -145,6 +165,8 @@ class SAC(nn.Module):
         checkpoint = torch.load(filename, map_location=self.device, weights_only=False)
 
         self.buffer.buffer = checkpoint["buffer"]
+        self.state_normalizer = checkpoint["state_normalizer"]
+        self.goal_normalizer = checkpoint["goal_normalizer"]
         self.actor.load_state_dict(checkpoint["actor"])
         self.q1.load_state_dict(checkpoint["q1"])
         self.q2.load_state_dict(checkpoint["q2"])
