@@ -67,6 +67,14 @@ class SAC(nn.Module):
         for transition in her_transitions:
             self.buffer.put(transition)
 
+    
+    def normalize_state_goal(self, state, goal):
+
+        norm_state = self.state_normalizer.normalize(state)
+        norm_goal = self.goal_normalizer.normalize(goal)
+
+        return torch.tensor(np.concatenate([norm_state, norm_goal]), dtype=torch.float32, device=self.device)
+
 
     def update(self, batch_size):
 
@@ -75,9 +83,6 @@ class SAC(nn.Module):
         states = np.stack(states, axis=0)       # (batch_size, obs_size)
         next_states = np.stack(next_states, 0)  # (batch_size, obs_size)
         goals = np.stack(goals, axis=0)  # (batch_size, goal_size)
-
-        self.state_normalizer.update(states)
-        self.goal_normalizer.update(goals)
 
         states = self.state_normalizer.normalize(states)
         next_states = self.state_normalizer.normalize(next_states)
@@ -199,6 +204,7 @@ class Actor(nn.Module):
         x = F.relu(self.fc2(x))
         mean = self.fc_means(x)
         log_std = self.fc_log_std(x)
+        log_std = torch.clamp(log_std, min=-20, max=2)
         std = torch.exp(log_std)
 
         return mean, std

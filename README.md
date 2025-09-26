@@ -189,11 +189,49 @@ The implementation of SAC is based on the original paper :
 > *Soft Actor-Critic: Off-Policy Maximum Entropy Deep Reinforcement Learning with a Stochastic Actor*,  
 > *Proceedings of the 35th International Conference on Machine Learning (ICML)*,  
 > vol. 80, pp. 1856–1865, 2018.  
-> [https://proceedings.mlr.press/v80/haarnoja18b.html](https://proceedings.mlr.press/v80/haarnoja18b.html)
+> [https://proceedings.mlr.press/v80/haarnoja18b.html](https://proceedings.mlr.press/v80/haarnoja18b.html)  
 
+<br>
+
+Following the architecture proposed in this paper, all 5 networks (Actor, both Q value Critics, Value and Target Value Critics) have 2 hidden layers each with 256 neurons.  
+- The Actor outputs Gaussian means and variances given the state (joints position) and a target goal
+- Q value Critics output a scalar given the state, goal and sampled action
+- Value Critics output a scalar given the state and goal
+
+As the Critics can be optimized **off-policy**, we also use a Replay Buffer.
+
+<br>
+
+Each task is available in different versions, with two main differences : 
+- **Sparse or Dense rewards** : Whether the agent only receives positive rewards after completing the task or continuoulsy throughout the episode depending on how close it is of completing the task (for example distance to target)
+- **End-effector or Joints control** : Whether the agent acts directly on the end-effector displacement (xyz displacement) or on the individual motion of each joint
+
+<br>
+
+Throughout this project, we will focus on the sparse rewards settings. This makes the tasks considerably more challenging as the agent does not receive any useful feedback untils it manages to complete the task by chance. However, this very general-purpose framework avoids the complicated task of engineering an approproate dense reward function that would bias the agent learning process. using sparse rewards, we let the agent explore the environment and discover by itself an optimal strategy (potentially better than the one we would have pushed it towards with dense rewards)  
+We will also focus on the joints control settings as it is more realistic than end-effector control. To use the latter on a physical robot, we would need a very precise model of the robotic arm movements, which in general we don't have. We hence remain in a model-free approach.
+
+<br>
 
 ### 3.1 Reach Task
+ 
+For the **Reach** task, the robotic arm has 6 degrees-of-freedom, corresponding to the 6 free joints (the grip is locked in closed position). Hence the action space has 6 dimensions in the joints control version. The observation space contains the position of the 6 joints as well as the target goal (ie. the point to reach). The "achieved goal" (the actual position of the end-effector) is also given, but we will not use it, as it can be derived from the joints position. The agent will have to learn this non-linear relation by itself.  
 
-Work in progress...
+We set the maximum episode length to 200 timesteps. Training starts after 20000 warmup timesteps. The agent is evaluated every 2000 timesteps by averaging return and success rate on 10 episodes run with deterministic policy (using the means outputted by the Actor)
+
+**Result :**  
+
+<p align="center">
+  <img src="images/reach_return.png" height="300" />
+  <img src="images/reach_success.png" height="300" />
+</p>
+<p align="center"><b>Success rate and average return throughout training</b></p>
+
+<br>
+
+<p align="center">
+  <img src="images/reach.gif" width="400" />
+</p>
+<p align="center"><b>Agent performing 50 episodes with 100% success rate after training</b></p>
 
 <br>

@@ -34,7 +34,10 @@ def run_eval_episode(env, model):
     while info.get("is_success", False): # Reset env if start is success state
         obs, info = env.reset()
 
-    state_goal = torch.tensor(np.concatenate([obs["observation"], obs["desired_goal"]]))
+    state, goal = obs["observation"], obs["desired_goal"]
+    norm_state = model.state_normalizer.normalize(state)
+    norm_goal = model.goal_normalizer.normalize(goal)
+    state_goal = torch.tensor(np.concatenate([norm_state, norm_goal]), dtype=torch.float32, device=model.device)
     done = False
     tot_reward = 0
 
@@ -44,7 +47,9 @@ def run_eval_episode(env, model):
 
             action = model.act(state_goal, deterministic=True)
             obs, reward, terminated, truncated, info = env.step(action)
-            state_goal = torch.tensor(np.concatenate([obs["observation"], obs["desired_goal"]]))
+            state = obs["observation"]
+            norm_state = model.state_normalizer.normalize(state)
+            state_goal = torch.tensor(np.concatenate([norm_state, norm_goal]), dtype=torch.float32, device=model.device)
             done = terminated or truncated
             tot_reward += reward
     
@@ -60,7 +65,10 @@ def generate_video(env_name, max_episode_steps, model, n_episodes, random, deter
         for i in range(n_episodes):
 
             obs, info = env.reset()
-            state_goal = torch.tensor(np.concatenate([obs["observation"], obs["desired_goal"]]))
+            state, goal = obs["observation"], obs["desired_goal"]
+            norm_state = model.state_normalizer.normalize(state)
+            norm_goal = model.goal_normalizer.normalize(goal)
+            state_goal = torch.tensor(np.concatenate([norm_state, norm_goal]), dtype=torch.float32, device=model.device)
             done = False
 
             while not done:
@@ -71,7 +79,9 @@ def generate_video(env_name, max_episode_steps, model, n_episodes, random, deter
                     action = env.action_space.sample()
 
                 obs, reward, terminated, truncated, info = env.step(action)
-                state_goal = torch.tensor(np.concatenate([obs["observation"], obs["desired_goal"]]))
+                state = obs["observation"]
+                norm_state = model.state_normalizer.normalize(state)
+                state_goal = torch.tensor(np.concatenate([norm_state, norm_goal]), dtype=torch.float32, device=model.device)
                 done = terminated or truncated
 
                 frames.append(env.render())
