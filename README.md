@@ -41,7 +41,12 @@ This project was originally inspired by the following paper :
 ---
 ### 🎮 Demo
 
-![Demo](images/dqn_2000_ep.gif)
+<p align="center">
+  <img src="images/dqn_2000_ep.gif" width="300" />
+</p>
+
+<p align="center"><b>DQN Agent playing a full Pong Game</b></p>
+
 
 ---
 
@@ -109,6 +114,8 @@ The architecture of the network is also inspired from the work of DeepMind resea
 <p align="center">
   <img src="images/breakout.gif" width="300" />
 </p>
+
+<p align="center"><b>A2C Agent playing a full Breakout Game</b></p>
 
 
 ---
