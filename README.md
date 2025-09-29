@@ -193,9 +193,9 @@ The implementation of SAC is based on the original paper :
 
 <br>
 
-Following the architecture proposed in this paper, all 5 networks (Actor, both Q value Critics, Value and Target Value Critics) have 2 hidden layers each with 256 neurons.  
+Following the architecture proposed in this paper, all 5 networks (Actor, both Q-value Critics, Value and Target Value Critics) have 2 hidden layers each with 256 neurons.  
 - The Actor outputs Gaussian means and variances given the state (joints position) and a target goal
-- Q value Critics output a scalar given the state, goal and sampled action
+- Q-value Critics output a scalar given the state, goal and sampled action
 - Value Critics output a scalar given the state and goal
 
 As the Critics can be optimized **off-policy**, we also use a Replay Buffer.
@@ -233,5 +233,44 @@ We set the maximum episode length to 200 timesteps. Training starts after 20000 
   <img src="images/reach.gif" width="400" />
 </p>
 <p align="center"><b>Agent performing 50 episodes with 100% success rate after training</b></p>
+
+### 3.1 Push Task
+
+For the **Push** task, the goal for the robotic arm is to move a cube to a target position. Its grip is still locked, so it should do so by simply pushing it towards the desired position. You can see an example of this task with the target position shown as the transparent green cube : 
+
+<p align="center">
+  <img src="images/push_task.jpg" width="400" />
+</p>
+<p align="center"><b>Example of the initial setting of an episode for the Push task</b></p>
+
+
+We first tried to train our agent with SAC in the same conditions as the one used previously for the **Reach** task. However, because of the greater difficulty of the task, the agent did not manage to learn a proper strategy and its success rate never increased. This was expected considering the sparsity of the rewards on such a difficult task. While on **Reach** the agent was able to sometimes achieve the target goal by chance when performing random actions, it is very unlikely on this task, because on top of reaching a particular point (the cube), the end-effector now also has to push the cube in the right direction, consistently enough so that it can reach the target destination and receive positive reward.  
+
+To tackle the challege of reward sparsity, we implemented **Hindsight Experience Replay**, based on the paper by OpenAI : 
+
+> Marcin Andrychowicz, Filip Wolski, Alex Ray, Jonas Schneider, Rachel Fong, Peter Welinder, Bob McGrew, Josh Tobin, OpenAI, Pieter Abbeel, Wojciech Zaremba,  
+> *Hindsight Experience Replay*,  
+> *Advances in Neural Information Processing Systems (NeurIPS)*,  
+> vol. 30, pp. 5048–5058, 2017.  
+> [https://proceedings.neurips.cc/paper/2017/hash/453fadbd8a1a3af50a9df4df899537b5-Abstract.html](https://proceedings.neurips.cc/paper/2017/hash/453fadbd8a1a3af50a9df4df899537b5-Abstract.html)
+
+The motivation behind **Hindsight Experience Replay** (HER) comes from a simple realization : when training an agent in a multi-goal settings with binary sparse rewards, the agent only exploits trajectories that lead to success. If the task is very complex and we do not insert any prior knowledge to the agent, the proportion of these successful trajectories among all generated trajectories can be extremely small or even null. In other words, the reward signal is constant, and hence doesn not contain any information helping the agent understanding the environment and the task.
+However, we could also consider that even the unsuccessful trajectories contain valuable information about the environment dynamics. Even if a certain sequence of actions did not lead the agent to the initial target, it has lead it somewhere, to a particular state. And maybe that if the agent could learn this relation, this causality, it would benefit its learning process about how to reach the actual target. 
+From this general idea, the concept of Hindsight Experience Replay is to augment our dataset of experienced trajectories by creating new samples with a modified target goal and a recomputed reward. From a tuple $(state, goal, action, reward, next \space state)$, we can generate a new tuple $(state, new \space goal, action, new \space reward, next \space state)$ that we can store alongside the "real" tuples in our Replay Buffer. As long as we are able to compute accurately this $new reward$, this tuple is exactly as valid as the original one. Indeed, the goal does not impact the environment dynamics, only the policy, but because we are learning off-policy this is not a problem. 
+In practice, different strategies are possible to create these "artificial" successful trajectories. The simplest one is to consider the terminal state of the episode as the new target. We can then replay the entire rollout by changing the original goal to this new one and recomputing the reward that the agent would have obtained at each timestep with this target. The new goal can also be sampled from the states visited later in the trajectory, or even sampled from the states visited during the whol training procedure
+HER is particularly relevant in the multi-goal settings we are working in, as the target goal is randomly initialized, and could indeed have been the final state reached by the agent. But researchers even shown that this method could also benefit the traning process in a single-goal context. In this case, HER could be considered as an implicit Curriculum Learning method.
+ 
+To first assess the benefits of HER, we tried comparing the learning process in the **Reach** with and without Hindsight Experience replay. The results are shown below.
+
+<p align="center">
+  <img src="images/reach_without_her.png" height="300" />
+  <img src="images/reach_her.png" height="300" />
+</p>
+<p align="center"><b>Comparaison of success rate during training with and without HER</b></p>
+
+We can see that using HER, the agent learned very quickly a good policy after the initial 20000 warmup timesteps. It reached a 100% success rate in only 50000 timesteps, contrary to the agent without HER that needed approximately 3 times longer. On this task, HER greatly improves sample-efficiency
+
+Unfortunately, in the same conditions, HER alone did not enable the agent to successuly learn the **Push** task. After more than 1M timesteps, the agent didn't show any sign of improvement and remained at a 0% success rate. As this task is significantly more challenging than **Reach**, maybe the agent would need even more time to explore sufficiently the environment. Intituively, the benefits of HER are also less important than on the previous task as the final state used as the new target goal is the position of the cube instead of the position of the arm. Hence the relation between the actions performed by the agent throughout the episode and this final state is not direct and harder to interpret. Very ofter they are even independant as the robotic arm may never touch the cube during the episode. In this case, the arfificial trajectories contain the information that placing the cube at that particular position with that particular target lead to a positive reward, but not what sequence ections to perform to achieve such result. Our methodology probably should be revised if we want to solve challenging tasks as this one.
+
 
 <br>

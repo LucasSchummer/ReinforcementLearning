@@ -61,11 +61,16 @@ class SAC(nn.Module):
             self.her.put((state, achieved_goal, action, next_state, done))
 
 
-    def save_her_transitions(self, new_goal):
+    def save_her_transitions(self, new_goal, first_achieved_goal):
 
-        her_transitions = self.her.generate_new_transitions(new_goal)
-        for transition in her_transitions:
-            self.buffer.put(transition)
+        # Create HER transitions only if the achieved goal has changed during the episode (if the arm has interacted with the cube)
+        if np.linalg.norm(new_goal - first_achieved_goal) > 1e-3:
+
+            her_transitions = self.her.generate_new_transitions(new_goal)
+            for transition in her_transitions:
+                self.buffer.put(transition)
+
+        self.her.clear()
 
     
     def normalize_state_goal(self, state, goal):
@@ -298,6 +303,9 @@ class HER():
     def put(self, transition):
         self.transitions.append(transition)
 
+    def clear(self):
+        self.transitions = []
+
     def generate_new_transitions(self, new_goal):
 
         new_transitions = []
@@ -308,5 +316,4 @@ class HER():
 
             new_transitions.append([state, new_goal, action, new_reward, next_state, done])
 
-        self.transitions = [] # Clear memory
         return new_transitions
