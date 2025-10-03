@@ -14,12 +14,12 @@ def compute_reward(achieved_goal, desired_goal, distance_threshold):
     d = distance(achieved_goal, desired_goal)
     return -np.array(d > distance_threshold, dtype=np.float32)
 
-def eval_model(model, env_name, max_episode_steps, n_episodes_eval):
+def eval_model(model, env_name, standardize, max_episode_steps, n_episodes_eval):
 
     env = gym.make(env_name, max_episode_steps=max_episode_steps)
     returns, successes = [], []
     for _ in range(n_episodes_eval):
-        ep_return, success = run_eval_episode(env, model)
+        ep_return, success = run_eval_episode(env, model, standardize)
         returns.append(ep_return)
         successes.append(success)
 
@@ -28,16 +28,17 @@ def eval_model(model, env_name, max_episode_steps, n_episodes_eval):
     return np.mean(returns), np.mean(successes)
 
 
-def run_eval_episode(env, model):
+def run_eval_episode(env, model, standardize):
 
     obs, info = env.reset()
     while info.get("is_success", False): # Reset env if start is success state
         obs, info = env.reset()
 
     state, goal = obs["observation"], obs["desired_goal"]
-    norm_state = model.state_normalizer.normalize(state)
-    norm_goal = model.goal_normalizer.normalize(goal)
-    state_goal = torch.tensor(np.concatenate([norm_state, norm_goal]), dtype=torch.float32, device=model.device)
+    if standardize:
+        state_goal = model.normalize_state_goal(state, goal) 
+    else:
+        state_goal = torch.tensor(np.concatenate([state, goal]), dtype=torch.float32, device=model.device) 
     done = False
     tot_reward = 0
 
@@ -48,14 +49,18 @@ def run_eval_episode(env, model):
             action = model.act(state_goal, deterministic=True)
             obs, reward, terminated, truncated, info = env.step(action)
             state = obs["observation"]
-            norm_state = model.state_normalizer.normalize(state)
-            state_goal = torch.tensor(np.concatenate([norm_state, norm_goal]), dtype=torch.float32, device=model.device)
+            
+            if standardize:
+                state_goal = model.normalize_state_goal(state, goal) 
+            else:
+                state_goal = torch.tensor(np.concatenate([state, goal]), dtype=torch.float32, device=model.device) 
+
             done = terminated or truncated
             tot_reward += reward
     
     return tot_reward, info.get("is_success", False)
 
-def generate_video(env_name, max_episode_steps, model, n_episodes, random, deterministic, filename):
+def generate_video(env_name, max_episode_steps, model, standardize, n_episodes, random, deterministic, filename):
 
     env = gym.make(env_name, render_mode="rgb_array", max_episode_steps=max_episode_steps)
     frames = []
@@ -65,10 +70,15 @@ def generate_video(env_name, max_episode_steps, model, n_episodes, random, deter
         for i in range(n_episodes):
 
             obs, info = env.reset()
+            while info.get("is_success", False): # Reset env if start is success state
+                obs, info = env.reset()
+
             state, goal = obs["observation"], obs["desired_goal"]
-            norm_state = model.state_normalizer.normalize(state)
-            norm_goal = model.goal_normalizer.normalize(goal)
-            state_goal = torch.tensor(np.concatenate([norm_state, norm_goal]), dtype=torch.float32, device=model.device)
+            if standardize:
+                state_goal = model.normalize_state_goal(state, goal) 
+            else:
+                state_goal = torch.tensor(np.concatenate([state, goal]), dtype=torch.float32, device=model.device) 
+
             done = False
 
             while not done:
@@ -80,8 +90,10 @@ def generate_video(env_name, max_episode_steps, model, n_episodes, random, deter
 
                 obs, reward, terminated, truncated, info = env.step(action)
                 state = obs["observation"]
-                norm_state = model.state_normalizer.normalize(state)
-                state_goal = torch.tensor(np.concatenate([norm_state, norm_goal]), dtype=torch.float32, device=model.device)
+                if standardize:
+                    state_goal = model.normalize_state_goal(state, goal) 
+                else:
+                    state_goal = torch.tensor(np.concatenate([state, goal]), dtype=torch.float32, device=model.device) 
                 done = terminated or truncated
 
                 frames.append(env.render())

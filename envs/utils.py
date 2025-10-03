@@ -44,8 +44,10 @@ class Normalizer:
 
     def normalize(self, batch):
         """Normalize goals using stored stats"""
-        return (batch - self.mean) / (np.sqrt(self.var) + self.eps)
-
+        sd = np.sqrt(np.maximum(self.var, 1e-2))
+        out = (batch - self.mean) / sd
+        print("Normalizing")
+        return out.astype(np.float32)
 
 def setup_training_dir(resume_training, algo, task, version):
     training_numbers = [int(folder.split("training")[-1]) for folder in glob.glob(f"training/{algo}/{task}/{version}/*")]

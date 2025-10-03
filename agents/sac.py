@@ -61,12 +61,13 @@ class SAC(nn.Module):
             self.her.put((state, achieved_goal, action, next_state, done))
 
 
-    def save_her_transitions(self, new_goal, first_achieved_goal):
+    def save_her_transitions(self, env, new_goal, first_achieved_goal):
 
         # Create HER transitions only if the achieved goal has changed during the episode (if the arm has interacted with the cube)
-        if np.linalg.norm(new_goal - first_achieved_goal) > 1e-3:
+        # but cube still on the table (not on the ground)
+        if np.linalg.norm(new_goal - first_achieved_goal) > 1e-3 and abs(new_goal[2] - .02) < 1e-3:
 
-            her_transitions = self.her.generate_new_transitions(new_goal)
+            her_transitions = self.her.generate_new_transitions(env, new_goal)
             for transition in her_transitions:
                 self.buffer.put(transition)
 
@@ -81,7 +82,7 @@ class SAC(nn.Module):
         return torch.tensor(np.concatenate([norm_state, norm_goal]), dtype=torch.float32, device=self.device)
 
 
-    def update(self, batch_size):
+    def update(self, batch_size, normalize):
 
         states, goals, actions, rewards, next_states, terminateds = self.buffer.sample(batch_size)
 
@@ -89,9 +90,10 @@ class SAC(nn.Module):
         next_states = np.stack(next_states, 0)  # (batch_size, obs_size)
         goals = np.stack(goals, axis=0)  # (batch_size, goal_size)
 
-        states = self.state_normalizer.normalize(states)
-        next_states = self.state_normalizer.normalize(next_states)
-        goals = self.goal_normalizer.normalize(goals)
+        if normalize:
+            states = self.state_normalizer.normalize(states)
+            next_states = self.state_normalizer.normalize(next_states)
+            goals = self.goal_normalizer.normalize(goals)
 
         states = torch.as_tensor(states, dtype=torch.float32, device=self.device)
         next_states = torch.as_tensor(next_states, dtype=torch.float32, device=self.device)
@@ -306,13 +308,14 @@ class HER():
     def clear(self):
         self.transitions = []
 
-    def generate_new_transitions(self, new_goal):
+    def generate_new_transitions(self, env, new_goal):
 
         new_transitions = []
         for transition in self.transitions:
 
             state, achieved_goal, action, next_state, done = transition
-            new_reward = compute_reward(achieved_goal, new_goal, self.distance_threshold)
+            # new_reward = compute_reward(achieved_goal, new_goal, self.distance_threshold)
+            new_reward = env.env.env.env.compute_reward(achieved_goal, new_goal, [])
 
             new_transitions.append([state, new_goal, action, new_reward, next_state, done])
 
