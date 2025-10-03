@@ -279,5 +279,16 @@ We can see that using HER, the agent learned very quickly a good policy after th
 
 Unfortunately, in the same conditions, HER alone did not enable the agent to successuly learn the **Push** task. After more than 1M timesteps, the agent didn't show any sign of improvement and remained at a 0% success rate. As this task is significantly more challenging than **Reach**, maybe the agent would need even more time to explore sufficiently the environment. Intituively, the benefits of HER are also less important than on the previous task as the final state used as the new target goal is the position of the cube instead of the position of the arm. Hence the relation between the actions performed by the agent throughout the episode and this final state is not direct and harder to interpret. Very ofter they are even independant as the robotic arm may never touch the cube during the episode. In this case, the arfificial trajectories contain the information that placing the cube at that particular position with that particular target lead to a positive reward, but not what sequence ections to perform to achieve such result. Our methodology probably should be revised if we want to solve challenging tasks as this one.
 
+After careful debugging and experimentation, we found out another problem with our naive implementation of HER. For this method to improve training, the modified target goal has to be realistic. Ideally we would like that it comes from the same distribution as the real environment goals. In our case, this was not true at all in the first place. Indeed, while the target positions for the cube were always on the table under the robotic arm, HER was generating artificial transitions with a completely unrealistic surrogate goal at a lower altitude. This happened because the arm sometimes knocked the cube out of the table while training, which did not cause termination. Because we were using the *final* strategy described in the HER paper, the final position of the cube (on the ground) was used as the surrogate target for the whole trajectory. The artificial transitions added to the Replay Buffer were not only useless, but terribly hurted the training process because as they were completely out of the goal distribution. When using normalization, this is even more catastrophic as we learn means and variances on the sampled real target goals, so the normalized surrogate goals can reach exrtreme values and completely break gradients.  
 
-<br>
+Considering previous observations, we improved our implementation of Hindsight Experience Replay with the *final* strategy with two majors changes : 
+- Do not use the trajectories where the achieved goal does not change (the arm does not touch the cube at all throughout the episode) to avoid adding bias to the training process by rewarding the agent for not interacting with the cube
+- Only use trajectories whose final state is consistent with the target goal distribution. In practice, filter out trajectories ending with the cube on the floor
+
+We also chose to not normalize states and goals considering that all dimensions have a similar range, and that potential outliers can hurt training.
+
+<p align="center">
+  <img src="images/return_push.png" height="300" />
+  <img src="images/success_push.png" height="300" />
+</p>
+<p align="center"><b>Success and return on the Push task</b></p>
